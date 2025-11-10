@@ -133,10 +133,16 @@ export function BetSlip({
       }
 
       // Serialize amount (u64 - 8 bytes little endian)
-      const amountBuffer = Buffer.alloc(8);
-      amountBuffer.writeBigUInt64LE(BigInt(amountLamports));
+      const amountBigInt = BigInt(amountLamports);
+      const amountBuffer = new Uint8Array(8);
+      const dataView = new DataView(amountBuffer.buffer);
+      dataView.setBigUint64(0, amountBigInt, true); // true = little endian
 
-      const data = Buffer.concat([discriminator, outcomeBuffer, amountBuffer]);
+      const data = Buffer.concat([
+        discriminator,
+        outcomeBuffer,
+        Buffer.from(amountBuffer),
+      ]);
 
       // Create the instruction
       const instruction = {

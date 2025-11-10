@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSolanaClient } from "@gillsdk/react";
 import { UPCOMING_GAMES } from "@/lib/games-data";
 import type { Game, Market, OutcomeKey } from "@/types/betting";
 import { PROGRAM_ID } from "@/lib/constants";
@@ -16,7 +15,7 @@ interface GamesListProps {
   onSelectGame: (game: Game) => void;
   onSelectOutcome: (outcome: OutcomeKey) => void;
 }
-    
+
 export function GamesList({
   sport,
   selectedGame,
@@ -24,7 +23,6 @@ export function GamesList({
   onSelectGame,
   onSelectOutcome,
 }: GamesListProps) {
-  const { rpc } = useSolanaClient();
   const [markets, setMarkets] = useState<Record<string, Market | null>>({});
 
   // Filter games by sport
@@ -60,7 +58,7 @@ export function GamesList({
     const interval = setInterval(fetchMarkets, 10000);
 
     return () => clearInterval(interval);
-  }, [rpc]);
+  }, []); // Empty dependency array since we're not using any external data yet
 
   return (
     <div className="space-y-3">

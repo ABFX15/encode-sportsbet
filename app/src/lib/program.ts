@@ -1,4 +1,5 @@
 import { address, getProgramDerivedAddress, type Address } from "gill";
+import { PublicKey } from "@solana/web3.js";
 import { PROGRAM_ID, USDC_MINT } from "./constants";
 import IDL from "./idl.json";
 
@@ -40,9 +41,11 @@ export async function getMarketPDA(gameId: string): Promise<Address> {
 }
 
 export async function getVaultPDA(marketAddress: Address): Promise<Address> {
+    // Convert address to PublicKey bytes (32 bytes)
+    const marketPubkey = new PublicKey(marketAddress.toString());
     const [pda] = await getProgramDerivedAddress({
         programAddress: PROGRAM_ID,
-        seeds: ["vault", Buffer.from(marketAddress)],
+        seeds: ["vault", marketPubkey.toBytes()],
     });
     return pda;
 }
@@ -51,12 +54,15 @@ export async function getBetPDA(
     marketAddress: Address,
     userAddress: Address
 ): Promise<Address> {
+    // Convert addresses to PublicKey bytes (32 bytes each)
+    const marketPubkey = new PublicKey(marketAddress.toString());
+    const userPubkey = new PublicKey(userAddress.toString());
     const [pda] = await getProgramDerivedAddress({
         programAddress: PROGRAM_ID,
         seeds: [
             "bet",
-            Buffer.from(marketAddress),
-            Buffer.from(userAddress),
+            marketPubkey.toBytes(),
+            userPubkey.toBytes(),
         ],
     });
     return pda;
