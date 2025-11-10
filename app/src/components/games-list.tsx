@@ -16,7 +16,7 @@ interface GamesListProps {
   onSelectGame: (game: Game) => void;
   onSelectOutcome: (outcome: OutcomeKey) => void;
 }
-
+    
 export function GamesList({
   sport,
   selectedGame,

@@ -1,9 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import {
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import type { Game, OutcomeKey } from "@/types/betting";
-import { USDC_DECIMALS, FEE_PERCENTAGE } from "@/lib/constants";
+import {
+  USDC_DECIMALS,
+  FEE_PERCENTAGE,
+  PROGRAM_ID,
+  USDC_MINT,
+} from "@/lib/constants";
+import {
+  getMarketPDA,
+  getBetPDA,
+  getVaultPDA,
+  outcomeToContract,
+  IDL,
+} from "@/lib/program";
+import { address } from "gill";
 
 interface BetSlipProps {
   selectedGame: Game | null;
@@ -20,8 +38,11 @@ export function BetSlip({
   onBetAmountChange,
   onBetPlaced,
 }: BetSlipProps) {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, signTransaction, sendTransaction } =
+    useWallet();
+  const { connection } = useConnection();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const calculatePotentialWin = () => {
     if (!selectedGame || !selectedOutcome || !betAmount) {
@@ -46,33 +67,142 @@ export function BetSlip({
   };
 
   const handlePlaceBet = async () => {
-    if (!connected || !publicKey) {
-      alert("Please connect your wallet first");
+    if (!connected || !publicKey || !sendTransaction) {
+      setError("Please connect your wallet first");
       return;
     }
 
     if (!selectedGame || !selectedOutcome || !betAmount) {
-      alert("Please select a game, outcome, and enter an amount");
+      setError("Please select a game, outcome, and enter an amount");
+      return;
+    }
+
+    const amount = parseFloat(betAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setError("Please enter a valid bet amount");
       return;
     }
 
     setLoading(true);
+    setError(null);
 
     try {
-      // TODO: Implement actual bet placement logic using Gill SDK
-      // This would involve:
-      // 1. Creating/fetching market PDA
-      // 2. Creating bet PDA
-      // 3. Transferring USDC to vault
-      // 4. Updating market and bet accounts
+      console.log("Starting bet placement...");
 
-      alert(
-        "Bet placement coming soon! Integration with smart contract in progress."
+      // Convert bet amount to lamports (USDC has 6 decimals)
+      const amountLamports = Math.floor(amount * Math.pow(10, USDC_DECIMALS));
+
+      // Get PDAs
+      const marketPda = await getMarketPDA(selectedGame.id);
+      const vaultPda = await getVaultPDA(marketPda);
+      const betPda = await getBetPDA(marketPda, address(publicKey.toString()));
+
+      console.log("PDAs derived:", {
+        market: marketPda.toString(),
+        vault: vaultPda.toString(),
+        bet: betPda.toString(),
+      });
+
+      // Get user's USDC token account
+      const userTokenAccount = getAssociatedTokenAddressSync(
+        new PublicKey(USDC_MINT.toString()),
+        publicKey
       );
+
+      console.log("User token account:", userTokenAccount.toString());
+
+      // Create the instruction data
+      // For Anchor, we need to serialize the instruction properly
+      // This is a simplified version - you may need to use Anchor's BorshInstructionCoder
+
+      const outcomeData = outcomeToContract(selectedOutcome);
+
+      // Build instruction using Anchor format
+      const discriminator = Buffer.from([222, 62, 67, 220, 63, 166, 126, 33]); // place_bet discriminator from IDL
+
+      // Serialize outcome enum (1 byte for variant + data)
+      let outcomeBuffer: Buffer;
+      if ("teamA" in outcomeData) {
+        outcomeBuffer = Buffer.from([1]); // TeamA variant
+      } else if ("teamB" in outcomeData) {
+        outcomeBuffer = Buffer.from([2]); // TeamB variant
+      } else if ("draw" in outcomeData) {
+        outcomeBuffer = Buffer.from([3]); // Draw variant
+      } else {
+        outcomeBuffer = Buffer.from([0]); // Pending variant
+      }
+
+      // Serialize amount (u64 - 8 bytes little endian)
+      const amountBuffer = Buffer.alloc(8);
+      amountBuffer.writeBigUInt64LE(BigInt(amountLamports));
+
+      const data = Buffer.concat([discriminator, outcomeBuffer, amountBuffer]);
+
+      // Create the instruction
+      const instruction = {
+        programId: new PublicKey(PROGRAM_ID.toString()),
+        keys: [
+          {
+            pubkey: new PublicKey(betPda.toString()),
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: new PublicKey(marketPda.toString()),
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: new PublicKey(vaultPda.toString()),
+            isSigner: false,
+            isWritable: true,
+          },
+          { pubkey: publicKey, isSigner: true, isWritable: true },
+          { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+          {
+            pubkey: SystemProgram.programId,
+            isSigner: false,
+            isWritable: false,
+          },
+        ],
+        data,
+      };
+
+      console.log("Instruction created, building transaction...");
+
+      // Create transaction
+      const transaction = new Transaction().add(instruction);
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      console.log("Sending transaction...");
+
+      // Send transaction
+      const signature = await sendTransaction(transaction, connection);
+
+      console.log("Transaction sent:", signature);
+
+      // Wait for confirmation
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      console.log("Transaction confirmed!");
+
+      alert(`Bet placed successfully! 🎉\nTransaction: ${signature}`);
       onBetPlaced();
     } catch (err) {
       console.error("Error placing bet:", err);
-      alert(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
+      alert(`Failed to place bet: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -204,6 +334,47 @@ export function BetSlip({
             </span>
           </div>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-950/50 border border-red-900/50 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <svg
+                className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-400">Error</p>
+                <p className="text-xs text-red-300 mt-1">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-500 hover:text-red-400"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Place Bet Button */}
         {connected ? (
