@@ -65,8 +65,10 @@ export function BetSlip({
       // 2. Creating bet PDA
       // 3. Transferring USDC to vault
       // 4. Updating market and bet accounts
-      
-      alert("Bet placement coming soon! Integration with smart contract in progress.");
+
+      alert(
+        "Bet placement coming soon! Integration with smart contract in progress."
+      );
       onBetPlaced();
     } catch (err) {
       console.error("Error placing bet:", err);
@@ -76,13 +78,37 @@ export function BetSlip({
     }
   };
 
+  const quickAmounts = [10, 25, 50, 100, 500];
+
   if (!selectedGame) {
     return (
-      <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-purple-500/20 p-6 h-fit sticky top-8">
-        <h3 className="text-xl font-bold text-white mb-4">Bet Slip</h3>
-        <p className="text-gray-400 text-center py-8">
-          Select a game and outcome to place a bet
-        </p>
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 sticky top-[145px]">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-white">Bet Slip</h3>
+          <span className="text-xs px-2 py-1 bg-zinc-800 text-zinc-400 rounded">
+            Empty
+          </span>
+        </div>
+        <div className="py-12 text-center">
+          <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg
+              className="w-8 h-8 text-zinc-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+          </div>
+          <p className="text-zinc-500 text-sm">
+            Select an outcome to start betting
+          </p>
+        </div>
       </div>
     );
   }
@@ -94,74 +120,126 @@ export function BetSlip({
       ? selectedGame.teamB
       : "Draw";
 
+  const potentialWin = calculatePotentialWin();
+
   return (
-    <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-purple-500/20 p-6 h-fit sticky top-8">
-      <h3 className="text-xl font-bold text-white mb-4">Bet Slip</h3>
+    <div className="bg-zinc-900 rounded-xl border border-zinc-800 sticky top-[145px]">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <h3 className="text-lg font-bold text-white">Bet Slip</h3>
+        <button
+          onClick={onBetPlaced}
+          className="text-xs text-zinc-500 hover:text-white transition-colors"
+        >
+          Clear
+        </button>
+      </div>
 
-      <div className="space-y-4">
-        {/* Game Info */}
-        <div className="pb-4 border-b border-purple-500/20">
-          <div className="text-sm text-gray-400 mb-1">Game</div>
-          <div className="text-white font-medium">
-            {selectedGame.teamA} vs {selectedGame.teamB}
+      {/* Content */}
+      <div className="p-6 space-y-6">
+        {/* Selected Bet */}
+        <div className="bg-zinc-950 rounded-lg p-4 border border-zinc-800">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex-1">
+              <p className="text-xs text-zinc-500 uppercase mb-1">
+                {selectedGame.sport}
+              </p>
+              <p className="text-sm font-medium text-white mb-1">
+                {selectedGame.teamA} vs {selectedGame.teamB}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+            <span className="text-xs text-zinc-500">Your pick</span>
+            <span className="text-sm font-bold text-amber-400">
+              {outcomeLabel}
+            </span>
           </div>
         </div>
 
-        {/* Selection */}
-        <div className="pb-4 border-b border-purple-500/20">
-          <div className="text-sm text-gray-400 mb-1">Selection</div>
-          <div className="text-white font-medium">
-            {selectedOutcome ? outcomeLabel : "Not selected"}
-          </div>
-        </div>
-
-        {/* Bet Amount Input */}
+        {/* Amount Input */}
         <div>
-          <label className="text-sm text-gray-400 block mb-2">
+          <label className="block text-sm font-medium text-zinc-400 mb-2">
             Bet Amount (USDC)
           </label>
-          <input
-            type="number"
-            placeholder="0.00"
-            value={betAmount}
-            onChange={(e) => onBetAmountChange(e.target.value)}
-            min="1"
-            step="1"
-            className="w-full px-4 py-3 bg-purple-500/10 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-          />
+          <div className="relative">
+            <input
+              type="number"
+              value={betAmount}
+              onChange={(e) => onBetAmountChange(e.target.value)}
+              placeholder="0.00"
+              className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50 transition-all"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-medium">
+              USDC
+            </span>
+          </div>
+
+          {/* Quick Amount Buttons */}
+          <div className="grid grid-cols-5 gap-2 mt-3">
+            {quickAmounts.map((amount) => (
+              <button
+                key={amount}
+                onClick={() => onBetAmountChange(amount.toString())}
+                className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:border-zinc-700 transition-all"
+              >
+                ${amount}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Potential Win */}
-        <div className="pb-4 border-b border-purple-500/20">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">Potential Win</span>
-            <span className="text-green-400 font-bold text-lg">
-              ${calculatePotentialWin()} USDC
+        <div className="bg-zinc-950 rounded-lg p-4 border border-zinc-800">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-zinc-500">Potential Win</span>
+            <span className="text-lg font-bold text-white">
+              ${potentialWin}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-600">Platform Fee (2%)</span>
+            <span className="text-zinc-500">
+              ${(parseFloat(potentialWin) * 0.02).toFixed(2)}
             </span>
           </div>
         </div>
 
         {/* Place Bet Button */}
-        <button
-          onClick={handlePlaceBet}
-          disabled={loading || !connected || !selectedOutcome || !betAmount}
-          className={`w-full py-4 rounded-lg font-bold text-lg transition-all ${
-            loading || !connected || !selectedOutcome || !betAmount
-              ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-              : "bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 shadow-lg shadow-purple-500/50"
-          }`}
-        >
-          {loading
-            ? "Processing..."
-            : !connected
-            ? "Connect Wallet"
-            : "Place Bet"}
-        </button>
+        {connected ? (
+          <button
+            onClick={handlePlaceBet}
+            disabled={loading || !betAmount || parseFloat(betAmount) <= 0}
+            className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            {loading ? "Placing Bet..." : "Place Bet"}
+          </button>
+        ) : (
+          <div className="w-full py-3 px-4 bg-zinc-800 text-zinc-500 text-center font-medium rounded-lg">
+            Connect wallet to place bets
+          </div>
+        )}
 
-        {/* Fee Info */}
-        <p className="text-xs text-gray-500 text-center">
-          2% platform fee applied to winnings
-        </p>
+        {/* Info */}
+        <div className="pt-4 border-t border-zinc-800 space-y-2">
+          <div className="flex items-start gap-2 text-xs text-zinc-500">
+            <svg
+              className="w-4 h-4 mt-0.5 flex-shrink-0"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <p>
+              Bets are locked when the game starts. You can cancel within 1 hour
+              of game time for a full refund.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

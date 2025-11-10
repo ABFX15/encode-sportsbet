@@ -7,7 +7,10 @@ import type { Game, Market, OutcomeKey } from "@/types/betting";
 import { PROGRAM_ID } from "@/lib/constants";
 import { address, getProgramDerivedAddress } from "gill";
 
+type Sport = "all" | "nba" | "nfl" | "epl";
+
 interface GamesListProps {
+  sport: Sport;
   selectedGame: Game | null;
   selectedOutcome: OutcomeKey | null;
   onSelectGame: (game: Game) => void;
@@ -15,6 +18,7 @@ interface GamesListProps {
 }
 
 export function GamesList({
+  sport,
   selectedGame,
   selectedOutcome,
   onSelectGame,
@@ -22,6 +26,12 @@ export function GamesList({
 }: GamesListProps) {
   const { rpc } = useSolanaClient();
   const [markets, setMarkets] = useState<Record<string, Market | null>>({});
+
+  // Filter games by sport
+  const filteredGames =
+    sport === "all"
+      ? UPCOMING_GAMES
+      : UPCOMING_GAMES.filter((game) => game.sport.toLowerCase() === sport);
 
   useEffect(() => {
     const fetchMarkets = async () => {
@@ -31,10 +41,7 @@ export function GamesList({
         try {
           const [marketPda] = await getProgramDerivedAddress({
             programAddress: PROGRAM_ID,
-            seeds: [
-              "market",
-              Buffer.from(game.id),
-            ],
+            seeds: ["market", Buffer.from(game.id)],
           });
 
           // Fetch market account data
@@ -56,141 +63,208 @@ export function GamesList({
   }, [rpc]);
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-white mb-6">Upcoming Games</h2>
+    <div className="space-y-3">
+      {filteredGames.length === 0 ? (
+        <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-12 text-center">
+          <p className="text-zinc-500">No games available for this sport</p>
+        </div>
+      ) : (
+        filteredGames.map((game) => {
+          const market = markets[game.id];
+          const totalPool = market
+            ? (Number(market.totalPoolA) +
+                Number(market.totalPoolB) +
+                Number(market.totalPoolDraw)) /
+              1e6
+            : 0;
 
-      {UPCOMING_GAMES.map((game) => {
-        const market = markets[game.id];
-        const totalPool = market
-          ? (Number(market.totalPoolA) +
-              Number(market.totalPoolB) +
-              Number(market.totalPoolDraw)) /
-            1e6
-          : 0;
+          const isSelected = selectedGame?.id === game.id;
 
-        return (
-          <div
-            key={game.id}
-            className={`bg-black/40 backdrop-blur-sm rounded-lg border p-6 cursor-pointer transition-all ${
-              selectedGame?.id === game.id
-                ? "border-purple-500 shadow-lg shadow-purple-500/20"
-                : "border-purple-500/20 hover:border-purple-500/40"
-            }`}
-            onClick={() => onSelectGame(game)}
-          >
-            {/* Game Header */}
-            <div className="flex items-center justify-between mb-4">
-              <span className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm font-medium">
-                {game.sport}
-              </span>
-              <span className="text-gray-400 text-sm">
-                {new Date(game.startTime).toLocaleDateString()}{" "}
-                {new Date(game.startTime).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
-
-            {/* Teams */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-semibold text-white">
-                {game.teamA}
-              </div>
-              <div className="text-gray-500 font-bold">VS</div>
-              <div className="text-lg font-semibold text-white">
-                {game.teamB}
-              </div>
-            </div>
-
-            {/* Pool Info */}
-            <div className="flex items-center justify-between mb-4 text-sm">
-              <span className="text-gray-400">Total Pool:</span>
-              <span className="text-green-400 font-medium">
-                ${totalPool.toFixed(2)} USDC
-              </span>
-            </div>
-
-            {/* Outcome Buttons */}
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                className={`py-3 px-4 rounded-lg border transition-all ${
-                  selectedGame?.id === game.id &&
-                  selectedOutcome === "teamA"
-                    ? "border-green-500 bg-green-500/20 text-white"
-                    : "border-purple-500/30 bg-purple-500/10 text-gray-300 hover:border-purple-500/50"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectGame(game);
-                  onSelectOutcome("teamA");
-                }}
-              >
-                <div className="text-xs mb-1">
-                  {game.teamA.split(" ").slice(-1)[0]}
+          return (
+            <div
+              key={game.id}
+              className={`bg-zinc-900 rounded-xl border transition-all hover:border-zinc-700 ${
+                isSelected
+                  ? "border-amber-500/50 ring-1 ring-amber-500/20"
+                  : "border-zinc-800"
+              }`}
+            >
+              {/* Game Header */}
+              <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-zinc-500 uppercase">
+                    {game.sport}
+                  </span>
+                  <span className="text-xs text-zinc-600">•</span>
+                  <span className="text-xs text-zinc-400">
+                    {new Date(game.startTime).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}{" "}
+                    at{" "}
+                    {new Date(game.startTime).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
                 </div>
-                <div className="text-sm font-bold">
-                  {market
-                    ? `${(Number(market.totalPoolA) / 1e6 || 0).toFixed(
-                        0
-                      )} USDC`
-                    : `${game.odds.teamA}x`}
-                </div>
-              </button>
-
-              {game.odds.draw && (
-                <button
-                  className={`py-3 px-4 rounded-lg border transition-all ${
-                    selectedGame?.id === game.id &&
-                    selectedOutcome === "draw"
-                      ? "border-green-500 bg-green-500/20 text-white"
-                      : "border-purple-500/30 bg-purple-500/10 text-gray-300 hover:border-purple-500/50"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectGame(game);
-                    onSelectOutcome("draw");
-                  }}
-                >
-                  <div className="text-xs mb-1">Draw</div>
-                  <div className="text-sm font-bold">
-                    {market
-                      ? `${(Number(market.totalPoolDraw) / 1e6 || 0).toFixed(
-                          0
-                        )} USDC`
-                      : `${game.odds.draw}x`}
+                {totalPool > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span className="text-xs text-zinc-400">
+                      ${totalPool.toLocaleString()} pool
+                    </span>
                   </div>
-                </button>
-              )}
+                )}
+              </div>
 
-              <button
-                className={`py-3 px-4 rounded-lg border transition-all ${
-                  selectedGame?.id === game.id &&
-                  selectedOutcome === "teamB"
-                    ? "border-green-500 bg-green-500/20 text-white"
-                    : "border-purple-500/30 bg-purple-500/10 text-gray-300 hover:border-purple-500/50"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectGame(game);
-                  onSelectOutcome("teamB");
-                }}
-              >
-                <div className="text-xs mb-1">
-                  {game.teamB.split(" ").slice(-1)[0]}
+              {/* Match Info */}
+              <div className="px-5 py-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-base font-semibold text-white">
+                      {game.teamA}
+                    </h3>
+                  </div>
+                  <div className="px-4">
+                    <span className="text-xs font-medium text-zinc-600">
+                      VS
+                    </span>
+                  </div>
+                  <div className="flex-1 text-right">
+                    <h3 className="text-base font-semibold text-white">
+                      {game.teamB}
+                    </h3>
+                  </div>
                 </div>
-                <div className="text-sm font-bold">
-                  {market
-                    ? `${(Number(market.totalPoolB) / 1e6 || 0).toFixed(
-                        0
-                      )} USDC`
-                    : `${game.odds.teamB}x`}
+
+                {/* Outcome Buttons */}
+                <div
+                  className={`grid gap-2 ${
+                    game.odds.draw ? "grid-cols-3" : "grid-cols-2"
+                  }`}
+                >
+                  <button
+                    className={`group relative overflow-hidden rounded-lg border transition-all ${
+                      isSelected && selectedOutcome === "teamA"
+                        ? "border-amber-500 bg-amber-500/10"
+                        : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectGame(game);
+                      onSelectOutcome("teamA");
+                    }}
+                  >
+                    <div className="px-4 py-3 text-center">
+                      <div
+                        className={`text-xs font-medium mb-1 ${
+                          isSelected && selectedOutcome === "teamA"
+                            ? "text-amber-400"
+                            : "text-zinc-500 group-hover:text-zinc-400"
+                        }`}
+                      >
+                        {game.teamA.split(" ").pop()}
+                      </div>
+                      <div
+                        className={`text-sm font-bold ${
+                          isSelected && selectedOutcome === "teamA"
+                            ? "text-amber-400"
+                            : "text-white"
+                        }`}
+                      >
+                        {market && Number(market.totalPoolA) > 0
+                          ? `${(Number(market.totalPoolA) / 1e6).toFixed(
+                              0
+                            )} USDC`
+                          : `${game.odds.teamA.toFixed(2)}x`}
+                      </div>
+                    </div>
+                  </button>
+
+                  {game.odds.draw && (
+                    <button
+                      className={`group relative overflow-hidden rounded-lg border transition-all ${
+                        isSelected && selectedOutcome === "draw"
+                          ? "border-amber-500 bg-amber-500/10"
+                          : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectGame(game);
+                        onSelectOutcome("draw");
+                      }}
+                    >
+                      <div className="px-4 py-3 text-center">
+                        <div
+                          className={`text-xs font-medium mb-1 ${
+                            isSelected && selectedOutcome === "draw"
+                              ? "text-amber-400"
+                              : "text-zinc-500 group-hover:text-zinc-400"
+                          }`}
+                        >
+                          Draw
+                        </div>
+                        <div
+                          className={`text-sm font-bold ${
+                            isSelected && selectedOutcome === "draw"
+                              ? "text-amber-400"
+                              : "text-white"
+                          }`}
+                        >
+                          {market && Number(market.totalPoolDraw) > 0
+                            ? `${(Number(market.totalPoolDraw) / 1e6).toFixed(
+                                0
+                              )} USDC`
+                            : `${game.odds.draw.toFixed(2)}x`}
+                        </div>
+                      </div>
+                    </button>
+                  )}
+
+                  <button
+                    className={`group relative overflow-hidden rounded-lg border transition-all ${
+                      isSelected && selectedOutcome === "teamB"
+                        ? "border-amber-500 bg-amber-500/10"
+                        : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectGame(game);
+                      onSelectOutcome("teamB");
+                    }}
+                  >
+                    <div className="px-4 py-3 text-center">
+                      <div
+                        className={`text-xs font-medium mb-1 ${
+                          isSelected && selectedOutcome === "teamB"
+                            ? "text-amber-400"
+                            : "text-zinc-500 group-hover:text-zinc-400"
+                        }`}
+                      >
+                        {game.teamB.split(" ").pop()}
+                      </div>
+                      <div
+                        className={`text-sm font-bold ${
+                          isSelected && selectedOutcome === "teamB"
+                            ? "text-amber-400"
+                            : "text-white"
+                        }`}
+                      >
+                        {market && Number(market.totalPoolB) > 0
+                          ? `${(Number(market.totalPoolB) / 1e6).toFixed(
+                              0
+                            )} USDC`
+                          : `${game.odds.teamB.toFixed(2)}x`}
+                      </div>
+                    </div>
+                  </button>
                 </div>
-              </button>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 }
